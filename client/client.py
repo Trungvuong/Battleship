@@ -16,22 +16,22 @@ def game():
 
     int player = 0
 
-    //receives what player it is
+    #receives what player it is
 
     print('Place your Ships!')
 
-    //send commands to place ships
+    #send commands to place ships
 
     while(true):
         print('Choose where to shoot or QUIT')
 
-        //sends commands of where to shoot
+        #sends commands of where to shoot
 
-        //update board
+        #update board
 
-        //wait for other player
+        #wait for other player
 
-        //update board
+        #update board
 
 def main():
     global ftp
