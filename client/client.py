@@ -24,7 +24,7 @@ def game():
     num = input('>>> ')
 
     #send commands to place ships
-    ftp.sendcmd('place ' + num)
+    ftp.sendcmd(" ".join(['place', num])
 
     while(true):
         print('Choose where to shoot [a1, b1, c1, ect...] or QUIT')
@@ -32,7 +32,7 @@ def game():
         coord = input('>>> ')
 
         #sends commands of where to shoot
-        ftp.sendcmd('shoot ' + coord)
+        ftp.sendcmd(" ".join(['shoot', coord]))
 
         #send command to update board
         ftp.sendcmd('update')
