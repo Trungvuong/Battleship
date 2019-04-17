@@ -7,31 +7,43 @@ connection = False
 
 def start(ip, port):
     ftp.connect(ip, int(port))
-    ftp.login()
+
+    #client chooses what player
+    print('Choose p1 or p2')
+    player = input('>>> ')
+
+    #login as player
+    ftp.login(player)
     print('Connected successfully...')
     connection = True
 
 def game():
     print('Welcome to BattleShip!')
 
-    int player = 0
-
-    #receives what player it is
-
-    print('Place your Ships!')
+    print('Enter Number of Ships [1-10]!')
+    num = input('>>> ')
 
     #send commands to place ships
+    ftp.sendcmd('place ' + num)
 
     while(true):
-        print('Choose where to shoot or QUIT')
+        print('Choose where to shoot [a1, b1, c1, ect...] or QUIT')
+
+        coord = input('>>> ')
 
         #sends commands of where to shoot
+        ftp.sendcmd('shoot ' + coord)
+
+        #send command to update board
+        ftp.sendcmd('update')
+
+        #send end turn command
+        ftp.sendcmd('end')
+
+        #busy wait for other player to play
 
         #update board
-
-        #wait for other player
-
-        #update board
+        ftp.sendcmd('update')
 
 def main():
     global ftp
@@ -47,6 +59,6 @@ def main():
         else:
             print("CONNECT needs an IP address and port number!\n ")
             main()
-        elif 'QUIT' in response:
-            ftp.quit()
-            print('Disconnecting from server...')
+    if 'QUIT' in response:
+        ftp.quit()
+        print('Disconnecting from server...')
