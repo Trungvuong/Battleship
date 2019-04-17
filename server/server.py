@@ -27,9 +27,23 @@ def main():
     server.serve_forever()
 
 #where the game takes place turn by turn
-#commands to handle are place, shoot coord, update, end
+#commands to handle are place num, shoot coord, update, end
 #need to add game logic
-#def game():
+
+#place ships randomly with given num
+def place(int num):
+    
+#place a shot with given coord
+def shoot(string coord):
+   
+#update both players screens with new boards
+def update():
+    
+#end players turns
+def end():
+    
+#game logic
+def game():
     
 
 if __name__ == "__main__":
