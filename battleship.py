@@ -1,383 +1,279 @@
-import pygame
+import argparse
+import os
+import platform
 import random
-from abc import ABC
-from enum import Enum
-from itertools import zip_longest
+import socket
+import sys
+from pickle import dumps, loads
 
 
-class Direction(Enum):
-    """A enum for storing the four points of the compass"""
-    NORTH = 0
-    EAST = 1
-    SOUTH = 2
-    WEST = 3
+class Player:
+    ships_len = (4, 3, 3, 2, 2, 2, 1, 1, 1, 1)
+    sym_ship = '●'
+    sym_hit = '○'
+    sym_miss = '~'
+    sym_destroyed = '%'
+    sym_empty = '·'
 
-    @property
-    def next(self):
-        """Returns the next point of the compass, for rotations"""
-        return Direction((self.value + 1) % 4)
+    def __init__(self, name):
+        self.name = name
+        self.fleet = {}
+        self.game_board = self.__create_empty_board()
+        self.guess_board = self.__create_empty_board()
+        self.__position_ships_on_board()
+        self.my_ships_destroyed = 0
+        self.opponent_ships_destroyed = 0
 
+    @staticmethod
+    def __create_empty_board():
+        temp = {}
+        for x in 'ABCDEFGHIJ':
+            for y in range(1, 11):
+                temp[x, y] = __class__.sym_empty
+        return temp
 
-class Ship:
-    """An object to store the data of one ship"""
-
-    def __init__(self, x, y, d, l):
-        self.location = (x, y)
-        self.direction = d
-        self.length = l
-
-    @property
-    def coordinate_list(self):
-        """Calculates the list of coordinates that the ship is located over"""
-        x, y = self.location
-        if self.direction == Direction.NORTH:
-            return [(x, y - i) for i in range(self.length)]
-        elif self.direction == Direction.EAST:
-            return [(x + i, y) for i in range(self.length)]
-        elif self.direction == Direction.SOUTH:
-            return [(x, y + i) for i in range(self.length)]
-        elif self.direction == Direction.WEST:
-            return [(x - i, y) for i in range(self.length)]
-
-    def rotate(self):
-        """Rotates the ship"""
-        self.direction = self.direction.next
-
-    def __repr__(self):
-        """A nice representation of the Ship object, for debugging"""
-        return "<Ship Object: ({},{}), {}, Length {}>".format(
-            *self.location, self.direction, self.length)
-
-
-class Board(ABC):
-    """A abstract base class for boards"""
-
-    def __init__(self, size=10, ship_sizes=[6, 4, 3, 3, 2]):
-        self.size = size
-        self.ship_sizes = ship_sizes
-        self.ships_list = []
-        self.hits_list = []
-        self.misses_list = []
-
-    def is_valid(self, ship):
-        """Checks whether a ship would be a valid placement on the board"""
-        for x, y in ship.coordinate_list:
-            if x < 0 or y < 0 or x >= self.size or y >= self.size:
-                return False
-        for otherShip in self.ships_list:
-            if self.ships_overlap(ship, otherShip):
-                return False
-        return True
-
-    def add_ship(self, ship: Ship):
-        """Adds a ship to the board"""
-        if self.is_valid(ship):
-            self.ships_list.append(ship)
-            return True
+    @staticmethod
+    def clear():
+        if platform.system() == 'Windows':
+            os.system('cls')
         else:
-            return False
+            os.system('clear')
 
-    def remove_ship(self, ship):
-        """Removes a ship from the board"""
-        self.ships_list.remove(ship)
-
-    def ships_overlap(self, ship1, ship2):
-        """Checks whether two ships overlap"""
-        for ship1_coord in ship1.coordinate_list:
-            for ship2_coord in ship2.coordinate_list:
-                if ship1_coord == ship2_coord:
-                    return True
-        return False
-
-    def get_ship(self, x, y):
-        """Gets a ship object from coordinates"""
-        for ship in self.ships_list:
-            if (x, y) in ship.coordinate_list:
-                return ship
-        return None
-
-    def valid_target(self, x, y):
-        """Checks whether a set of coordinates is a valid shot
-        Coordinates are within the board, and shot hasn't previously been taken
-        """
-        if x not in range(self.size) or y not in range(self.size):
-            return False
-        for previous_shot in self.misses_list + self.hits_list:
-            if (x, y) == previous_shot:
-                return False
-        return True
-
-    def shoot(self, x, y):
-        """Registers a shot on the board, saving to appropriate list"""
-        if not self.valid_target(x, y):
-            return False
-
-        for ship in self.ships_list:
-            for ship_coordinate in ship.coordinate_list:
-                if (x, y) == ship_coordinate:
-                    self.hits_list.append((x, y))
-                    return True
-
-        self.misses_list.append((x, y))
-        return True
-
-    def colour_grid(self, colours, include_ships=True):
-        """Calculates a colour representation of the board for display"""
-        grid = [[colours["water"] for _ in range(self.size)]
-                for _ in range(self.size)]
-
-        if include_ships:
-            for ship in self.ships_list:
-                for x, y in ship.coordinate_list:
-                    grid[y][x] = colours["ship"]
-
-        for x, y in self.hits_list:
-            grid[y][x] = colours["hit"]
-
-        for x, y in self.misses_list:
-            grid[y][x] = colours["miss"]
-
-        return grid
-
-    @property
-    def gameover(self):
-        """Checks to see if all the ships have been fully hit"""
-        for ship in self.ships_list:
-            for coordinate in ship.coordinate_list:
-                if coordinate not in self.hits_list:
-                    return False
-        return True
-
-    def __str__(self):
-        """String representation of the board
-        similar to colour grid but for printing
-        """
-        output = (("~" * self.size) + "\n") * self.size
-        for ship in self.ships_list:
-            for x, y in ship.coordinate_list:
-                output[x + y * (self.size + 1)] = "S"
-        return output
-
-
-class PlayerBoard(Board):
-    """A Board for user input"""
-
-    def __init__(self, display, board_size, ship_sizes):
-        """Initialises the board by placing ships."""
-        super().__init__(board_size, ship_sizes)
-        self.display = display
-
-        direction = Direction.NORTH
-        while True:
-            self.display.show(None, self)
-
-            if self.ship_to_place:
-                text = 'Click where you want your {}-long ship to be:'.format(
-                    self.ship_to_place)
+    def print_board(self, me, opponent):
+        self.clear()
+        for i in (self.game_board, self.guess_board):
+            if i == self.game_board:
+                print("{}\n{}".format(me, '-' * len(self.name)))
             else:
-                text = 'Click again to rotate a ship, or elsewhere if ready.'
-            self.display.show_text(text, lower=True)
+                print("{}\n{}".format(opponent, '-' * len(opponent)))
+            print("""  1 2 3 4 5 6 7 8 9 10
+A {} {} {} {} {} {} {} {} {} {}
+B {} {} {} {} {} {} {} {} {} {}
+C {} {} {} {} {} {} {} {} {} {}
+D {} {} {} {} {} {} {} {} {} {}
+E {} {} {} {} {} {} {} {} {} {}
+F {} {} {} {} {} {} {} {} {} {}
+G {} {} {} {} {} {} {} {} {} {}
+H {} {} {} {} {} {} {} {} {} {}
+I {} {} {} {} {} {} {} {} {} {}
+J {} {} {} {} {} {} {} {} {} {}
+""".format(
+                i['A', 1], i['A', 2], i['A', 3], i['A', 4], i['A', 5],
+                i['A', 6], i['A', 7], i['A', 8], i['A', 9], i['A', 10],
+                i['B', 1], i['B', 2], i['B', 3], i['B', 4], i['B', 5],
+                i['B', 6], i['B', 7], i['B', 8], i['B', 9], i['B', 10],
+                i['C', 1], i['C', 2], i['C', 3], i['C', 4], i['C', 5],
+                i['C', 6], i['C', 7], i['C', 8], i['C', 9], i['C', 10],
+                i['D', 1], i['D', 2], i['D', 3], i['D', 4], i['D', 5],
+                i['D', 6], i['D', 7], i['D', 8], i['D', 9], i['D', 10],
+                i['E', 1], i['E', 2], i['E', 3], i['E', 4], i['E', 5],
+                i['E', 6], i['E', 7], i['E', 8], i['E', 9], i['E', 10],
+                i['F', 1], i['F', 2], i['F', 3], i['F', 4], i['F', 5],
+                i['F', 6], i['F', 7], i['F', 8], i['F', 9], i['F', 10],
+                i['G', 1], i['G', 2], i['G', 3], i['G', 4], i['G', 5],
+                i['G', 6], i['G', 7], i['G', 8], i['G', 9], i['G', 10],
+                i['H', 1], i['H', 2], i['H', 3], i['H', 4], i['H', 5],
+                i['H', 6], i['H', 7], i['H', 8], i['H', 9], i['H', 10],
+                i['I', 1], i['I', 2], i['I', 3], i['I', 4], i['I', 5],
+                i['I', 6], i['I', 7], i['I', 8], i['I', 9], i['I', 10],
+                i['J', 1], i['J', 2], i['J', 3], i['J', 4], i['J', 5],
+                i['J', 6], i['J', 7], i['J', 8], i['J', 9], i['J', 10])
+            )
 
-            x, y = self.display.get_input()
-            if x is not None and y is not None:
-                ship = self.get_ship(x, y)
-                if ship:
-                    self.remove_ship(ship)
-                    ship.rotate()
-                    if self.is_valid(ship):
-                        self.add_ship(ship)
-                elif self.ship_to_place:
-                    ship = Ship(x, y, direction, self.ship_to_place)
-                    if self.is_valid(ship):
-                        self.add_ship(ship)
+    def __position_ships_on_board(self):
+        """
+        Ships are placed so that no ship touches any other ship, not even diagonally.
+        """
+        for ship_num, ship_len in enumerate(self.ships_len, 1):
+            self.fleet[ship_num] = {}
+            while True:
+                direction = random.choice([(0, 1), (1, 0)])  # horizontal→(0, 1) vertical↓(1, 0)
+                row = random.choice('ABCDEFGHIJ')  # choose row
+                col = random.choice(range(1, 11))  # choose column
+                temp = {}
+                for part in range(ship_len):
+                    for a, b in [(0, 0), (-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
+                        try:
+                            if self.game_board[chr(ord(row) + part * direction[0] + a), col + part * direction[1] + b] \
+                                    != __class__.sym_empty:
+                                break
+                        except KeyError:
+                            if a == 0 and b == 0:
+                                break
                     else:
-                        direction = direction.next
+                        temp[(chr(ord(row) + part * direction[0]), col + part * direction[1])] = False
+                        continue
+                    break
                 else:
+                    self.fleet[ship_num] = temp
+                    for part in self.fleet[ship_num]:
+                        self.game_board[part] = __class__.sym_ship
                     break
 
-                if self.is_valid(ship):
-                    self.add_ship(ship)
+    def get_user_guess(self):
+        while True:  # loop until user provides valid input (row=A-J, col=1-10, and that its an empty cell on board
+            try:
+                flush_input()  # clear all keystrokes made by user while waiting for opponent
+                user = input("{}, Select Row and column (e.g. B8): ".format(self.name))  # get row and column from user
+                row = user[0].upper()  # take first character and make it upper case
+                col = int(user[1:])  # take the remaining characters and validate they are all digits
+                if row in 'ABCDEFGHIJ' and col in range(1, 11):  # check row and col are in range
+                    if self.guess_board[row, col] == __class__.sym_empty:  # check that this guess is on an empty cell
+                        return row, col  # if all conditions are met return row and col
+            except (ValueError, IndexError):
+                pass
+            except KeyboardInterrupt:
+                print("\nBye!")
+                sys.exit(0)
 
-            Display.flip()
-
-    @property
-    def ship_to_place(self):
-        """Returns a ship length that needs to be placed, if any"""
-        placed_sizes = sorted(ship.length for ship in self.ships_list)
-        sizes = sorted(self.ship_sizes)
-        for placed, to_place in zip_longest(placed_sizes, sizes):
-            if placed != to_place:
-                return to_place
-        return None
-
-
-class AIBoard(Board):
-    """A Board controlled by a AI"""
-
-    def __init__(self, board_size, ship_sizes):
-        """Initialises the board by randomly placing ships"""
-        super().__init__(board_size, ship_sizes)
-        for ship_length in self.ship_sizes:
-            ship_added = False
-            while not ship_added:
-                x = random.randint(0, board_size - 1)
-                y = random.randint(0, board_size - 1)
-                ship_direction = random.choice(list(Direction))
-                ship = Ship(x, y, ship_direction, ship_length)
-                if self.is_valid(ship):
-                    self.add_ship(ship)
-                    ship_added = True
-
-
-class Display:
-    """Class to handle PyGame input and output"""
-    colours = {
-        "water": pygame.color.Color("blue"),
-        "ship": pygame.color.Color("gray"),
-        "hit": pygame.color.Color("red"),
-        "miss": pygame.color.Color("lightcyan"),
-        "background": pygame.color.Color("navy"),
-        "text": pygame.color.Color("white")
-    }
-
-    def __init__(self, board_size=10, cell_size=30, margin=15):
-        self.board_size = board_size
-        self.cell_size = cell_size
-        self.margin = margin
-
-        pygame.init()
-        pygame.font.init()
-        self.font = pygame.font.SysFont("Helvetica", 14)
-
-        screen_width = self.cell_size * board_size + 2 * margin
-        screen_height = 2 * self.cell_size * board_size + 3 * margin
-        self.screen = pygame.display.set_mode(
-            [screen_width, screen_height])
-        pygame.display.set_caption("Battleships")
-
-    def show(self, upper_board, lower_board, include_top_ships=False):
-        """Requests appropriate COlour Grids from boards, and draws them"""
-        if upper_board is not None:
-            upper_colours = upper_board.colour_grid(
-                self.colours, include_top_ships)
-
-        if lower_board is not None:
-            lower_colours = lower_board.colour_grid(
-                self.colours)
-
-        self.screen.fill(Display.colours["background"])
-        for y in range(self.board_size):
-            for x in range(self.board_size):
-
-                if upper_board is not None:
-                    pygame.draw.rect(self.screen, upper_colours[y][x],
-                                     [self.margin + x * self.cell_size,
-                                      self.margin + y * self.cell_size,
-                                      self.cell_size, self.cell_size])
-
-                if lower_board is not None:
-                    offset = self.margin * 2 + self.board_size * self.cell_size
-                    pygame.draw.rect(self.screen, lower_colours[y][x],
-                                     [self.margin + x * self.cell_size,
-                                      offset + y * self.cell_size,
-                                      self.cell_size, self.cell_size])
-
-    def get_input(self):
-        """Converts MouseEvents into board corrdinates, for input"""
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                Display.close()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = pygame.mouse.get_pos()
-                y = y % (self.board_size * self.cell_size + self.margin)
-                x = (x - self.margin) // self.cell_size
-                y = (y - self.margin) // self.cell_size
-                if x in range(self.board_size) and y in range(self.board_size):
-                    return x, y
-        return None, None
-
-    def show_text(self, text, upper=False, lower=False):
-        """Displays text on the screen, either upper or lower """
-        x = self.margin
-        y_up = x
-        y_lo = self.board_size * self.cell_size + self.margin
-        label = self.font.render(text, True, Display.colours["text"])
-        if upper:
-            self.screen.blit(label, (x, y_up))
-        if lower:
-            self.screen.blit(label, (x, y_lo))
-
-    @classmethod
-    def flip(cls):
-        pygame.display.flip()
-        pygame.time.Clock().tick(60)
-
-    @classmethod
-    def close(cls):
-        pygame.display.quit()
-        pygame.quit()
-
-
-class Game:
-    """The overall class to control the game"""
-
-    def __init__(self, display, size=10, ship_sizes=[6, 4, 3, 3, 2]):
-        """Sets up the game by generating two Boards"""
-        self.display = display
-        self.board_size = size
-        self.ai_board = AIBoard(size, ship_sizes)
-        self.player_board = PlayerBoard(display, size, ship_sizes)
-
-    def play(self):
-        """The main game loop, alternating shots until someone wins"""
-        print("Play starts")
-        while not self.gameover:
-            if self.player_shot():
-                self.ai_shot()
-            self.display.show(self.ai_board, self.player_board)
-            self.display.show_text("Click to guess:")
-            Display.flip()
-
-    def ai_shot(self):
-        """The AI's shot selection just randomly selects coordinates"""
-        x, y = -1, -1
-        while not self.player_board.valid_target(x, y):
-            x = random.randint(0, self.board_size - 1)
-            y = random.randint(0, self.board_size - 1)
-        self.player_board.shoot(x, y)
-
-    def player_shot(self):
-        """Uses input to decide if a shot is valid or not"""
-        x, y = self.display.get_input()
-        if self.ai_board.valid_target(x, y):
-            self.ai_board.shoot(x, y)
+    def check_if_hit(self, row, col):
+        if self.game_board[row, col] == __class__.sym_ship:
             return True
+        return False
+
+    @staticmethod
+    def mark_on_board(row, col, hit, board_type):
+        if hit:
+            board_type[row, col] = __class__.sym_hit
         else:
-            return False
+            board_type[row, col] = __class__.sym_miss
 
-    @property
-    def gameover(self):
-        """Determines and prints the winner"""
-        if self.ai_board.gameover:
-            print("Congratulations you won")
+    def mark_on_fleet(self, row, col):
+        for ship in self.fleet:
+            if (row, col) in self.fleet[ship]:
+                self.fleet[ship][row, col] = True
+                return ship
+
+    def check_if_ship_destroyed(self, ship):
+        for part in self.fleet[ship]:  # check if all parts of the ship got hit
+            if self.fleet[ship][part] is False:  # if at least one part wasn't hit return false
+                return False
+        else:  # if all parts of ship got hit
             return True
-        elif self.player_board.gameover:
-            print("Congratulations you lost")
-            return True
+
+    @staticmethod
+    def mark_destroyed_ship_on_board(ship, board_type):
+        for part in ship:
+            board_type[part] = __class__.sym_destroyed
+            for a, b in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
+                try:
+                    if board_type[chr(ord(part[0]) + a), part[1] + b] == __class__.sym_empty:
+                        board_type[chr(ord(part[0]) + a), part[1] + b] = __class__.sym_miss
+                except KeyError:
+                    pass
+
+
+def get_ip_address():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    return s.getsockname()[0]
+
+
+def flush_input():
+    try:
+        import msvcrt
+        while msvcrt.kbhit():
+            msvcrt.getch()
+    except ImportError:
+        import termios
+        termios.tcflush(sys.stdin, termios.TCIOFLUSH)
+
+
+def main():
+    try:
+        port = 5000
+
+        # parsing arguments #
+        parser = argparse.ArgumentParser()
+        g = parser.add_mutually_exclusive_group()
+        g.add_argument('-c', dest='server_ip', help='Run as Client')
+        g.add_argument('-s', dest='server', action='store_true', help='Run as Server')
+        args = parser.parse_args()
+        if args.server is False and args.server_ip is None:
+            parser.error("at least one flag is required")
+        ##########
+
+        # handle connection #
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if args.server:
+            s.bind(("0.0.0.0", port))
+            s.listen(1)
+            print('Waiting for opponent to join me at {}:{}'.format(get_ip_address(), port))
+            s, addr = s.accept()
+            print('Received connection: {}:{}'.format(addr[0], addr[1]))
+            my_turn = False
         else:
-            return False
+            s.connect((args.server_ip, port))
+            my_turn = True
+        ##########
+
+        # get players name and print initial board #
+        my_name = input("Enter your name: ")  # get my name
+        s.send(dumps(my_name))  # send my name to opponent
+        opponent_name = loads(s.recv(1024))  # receive opponent's name
+        p = Player(my_name)  # create instance of my player
+        p.print_board(my_name, opponent_name)  # print initial boards
+        ##########
+
+        # ongoing game #
+        while True:  # main game loop
+            if my_turn:  # if it is my turn
+                row, col = p.get_user_guess()  # get my guess
+                s.send(dumps((row, col)))  # send my guess to opponent
+                hit = loads(s.recv(1024))  # get opponent's feedback on my guess (hit or miss)
+                if hit:  # if I hit one of the opponent's ships
+                    msg = "You guessed {}{} - HIT".format(row, col)
+                    p.mark_on_board(row, col, True, p.guess_board)  # mark the hit on my guess board
+                    ship_destroyed = (loads(s.recv(1024)))  # get opponent notification if I destroyed a ship
+                    if ship_destroyed:  # if I destroyed opponent's ship
+                        p.mark_destroyed_ship_on_board(ship_destroyed, p.guess_board)  # reveal ship on my guess board
+                        p.opponent_ships_destroyed += 1  # increment my opponent's destroyed ship counter
+                        if p.opponent_ships_destroyed == len(p.ships_len):  # if all opponent's ships are destroyed
+                            break  # stop game main loop
+                else:  # if I missed
+                    msg = "You guessed {}{} - MISS".format(row, col)
+                    p.mark_on_board(row, col, False, p.guess_board)  # mark miss on my guess board
+                    my_turn = False  # switch turns
+            else:  # if its opponent's turn
+                print("Waiting for {} to send his guess".format(opponent_name))  # prompt waiting for opponent
+                row, col = loads(s.recv(1024))  # receive guessed row and column from opponent
+                if p.check_if_hit(row, col):  # if opponent hit one of my ships
+                    msg = "{} guessed {}{} - HIT".format(opponent_name, row, col)
+                    s.send(dumps(True))  # notify opponent he hit one of my ships
+                    p.mark_on_board(row, col, True, p.game_board)  # mark hit on my game board
+                    ship_that_got_hit = p.mark_on_fleet(row, col)  # check which one of my ships got hit
+                    if p.check_if_ship_destroyed(ship_that_got_hit):  # if the ship that got hit was destroyed
+                        s.send(dumps(p.fleet[ship_that_got_hit]))  # notify coordinates of destroyed a ship to opponent
+                        p.mark_destroyed_ship_on_board(p.fleet[ship_that_got_hit],
+                                                       p.game_board)  # reveal ship on game board
+                        p.my_ships_destroyed += 1  # increment ship destroyed counter
+                        if p.my_ships_destroyed == len(p.ships_len):  # if all my ships are destroyed
+                            break  # stop game main loop
+                    else:  # if the ship that got hit wasn't destroyed
+                        s.send(dumps(False))  # notify opponent that the hit didn't destroy a ship
+                else:  # if opponent missed
+                    msg = "{} guessed {}{} - MISS".format(opponent_name, row, col)
+                    s.send(dumps(False))  # notify opponent that he missed
+                    p.mark_on_board(row, col, False, p.game_board)  # mark the miss on my game board
+                    my_turn = True  # switch turn to opponent
+            p.print_board(my_name, opponent_name)  # print updated boards after each turn
+            print(msg)
+        ##########
+
+        # declare winner #
+        p.print_board(my_name, opponent_name)  # print final game board
+        if p.my_ships_destroyed > p.opponent_ships_destroyed:  # if opponent destroyed more ships than me
+            print("{} is the winner!".format(opponent_name))  # declare opponent as the winner
+        else:  # if I destroyed more ships than opponent
+            print("{} is the winner!".format(my_name))  # declare me as the winner
+        ##########
+    except KeyboardInterrupt:
+        print("\nBye!")
+    except (EOFError, ConnectionAbortedError, ConnectionResetError):
+        print("\nopponent has disconnected")
+    except ConnectionRefusedError:
+        print("Either opponent didn't start server or a network problem")
 
 
-if __name__ == "__main__":
-    while True:
-        d = Display()
-        Game(d).play()
-        # Game(d, 2, [1,1]).play()
-        d.close()
-
-        response = input("Replay? y/n: ").lower()
-        while response not in ['y', 'n']:
-            response = input("Must be y or n: ")
-        if response == 'n':
-            print("Thanks, goodbye.")
-            break
+if __name__ == '__main__':
+    main()
