@@ -266,7 +266,7 @@ def main():
                 print("Waiting for {} to send his guess".format(opponent_name))  
                 row, col = loads(s.recv(1024))  # Receive guessed row and column from opponent
                 if p.check_if_hit(row, col):  # If opponent hit one of my ships
-                    msg = "{} guessed {}{} - HIT".format(opponent_name, row, col)
+                    message = "{} guessed {}{} - HIT".format(opponent_name, row, col)
                     s.send(dumps(True))  # Tells opponent they hit one of my ships
                     p.mark_on_board(row, col, True, p.game_board)  # Mark hit on my game board
                     ship_that_got_hit = p.mark_on_fleet(row, col)  # Checks which of my ships got hit
