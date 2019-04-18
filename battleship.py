@@ -25,9 +25,9 @@ class Player:
     
     # This was the way we wanted to indicate the statuses of the ships
     sym_ship = '●'
-    sym_hit = '○'
-    sym_miss = '~'
-    sym_destroyed = '%'
+    sym_hit = 'x'
+    sym_miss = 'o'
+    sym_destroyed = '*'
     sym_empty = '·'
     
     # Constructor method for our class
@@ -261,7 +261,7 @@ def main():
                 else:  # If I missed
                     message = "You guessed {}{} - MISS".format(row, col)
                     p.mark_on_board(row, col, False, p.guess_board)  # Mark a miss on my guess board
-                    my_turn = False  # Switch turns
+                my_turn = False  # Switch turns
             else:  # If its opponent's turn
                 print("Waiting for {} to send his guess".format(opponent_name))  
                 row, col = loads(s.recv(1024))  # Receive guessed row and column from opponent
@@ -283,7 +283,7 @@ def main():
                     message = "{} guessed {}{} - MISS".format(opponent_name, row, col)
                     s.send(dumps(False))  # Notify opponent that he missed
                     p.mark_on_board(row, col, False, p.game_board)  # Mark the miss on my game board
-                    my_turn = True  # Switch turn to opponent
+                my_turn = True  # Switch turns
             p.print_board(my_name, opponent_name)  # Print board after each turn
             print(message)
 
@@ -298,7 +298,7 @@ def main():
     except KeyboardInterrupt:
         print("\nBye!")
     except (EOFError, ConnectionAbortedError, ConnectionResetError):
-        print("\nopponent has disconnected")
+        print("\n Opponent has disconnected")
     except ConnectionRefusedError:
         print("Server never started or there is a network problem")
 
