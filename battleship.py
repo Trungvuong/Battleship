@@ -1,16 +1,12 @@
 '''
-This program runs an instance of the classic Battleship game in 
-Python3. The prompt initially asks the user for their classification:
-either host or client. Then the names of the two will be asked and then
-the two players will be able to play each other in the game Battleship.
-The player's pieces will be randomized and each user gets a turn to 
-guess the ship's locations. A simple implementation of Battleship.
-Enjoy.
+Game of Battleship. One server and client specified by either -c <ipaddress> or -s
+
+Ships placed randomly on board not toughing each other. Players take turns taking shots
+until there is a winner.
 
 @author Trung-Vuong Pham, Ryan Eisenbarth, and Kevin Holkeboer
 @version 1.0
 '''
-# required imports for the program
 import argparse
 import os
 import platform
@@ -19,7 +15,7 @@ import socket
 import sys
 from pickle import dumps, loads
 
-# This is the player class
+#Player Class
 class Player:
     ships_len = (4, 3, 3, 2, 2, 2, 1, 1, 1, 1)
     
@@ -30,7 +26,7 @@ class Player:
     sym_destroyed = '*'
     sym_empty = '·'
     
-    # Constructor method for our class
+    # Constructor
     def __init__(self, name):
         self.name = name
         self.fleet = {}
@@ -49,7 +45,7 @@ class Player:
                 temp[x, y] = __class__.sym_empty
         return temp
     
-    # Helper method to clear screen
+    # Clear screen with system calls
     @staticmethod
     def clear():
         if platform.system() == 'Windows':
@@ -66,8 +62,8 @@ class Player:
             else:
                 print("{}\n{}".format(opponent, '-' * len(opponent)))
             
-            # This approach was the way we were able to get the board 
-            # to print how we wanted it to print
+            # Text based Battleship board 
+        
             print("""  1 2 3 4 5 6 7 8 9 10
 A {} {} {} {} {} {} {} {} {} {}
 B {} {} {} {} {} {} {} {} {} {}
@@ -103,17 +99,17 @@ J {} {} {} {} {} {} {} {} {} {}
             )
 
     # This method creates the positions on the board
-    # Ships are placed randomly and should never touch each other
+    # Ships are placed randomly and never touch each other
     def __position_ships_on_board(self):
         for ship_num, ship_len in enumerate(self.ships_len, 1):
             self.fleet[ship_num] = {}
             while True:
-                # This was how we randomized the board so the players don't have to physically 
-                # choose spots for ships.
-                direction = random.choice([(0, 1), (1, 0)])  # horizontal→(0, 1) vertical↓(1, 0)
-                row = random.choice('ABCDEFGHIJ')  # choose row
-                col = random.choice(range(1, 11))  # choose column
-                temp = {} # This creates a temporary board
+                # Randomized ship placement 
+                # Choose spots for ships
+                direction = random.choice([(0, 1), (1, 0)])
+                row = random.choice('ABCDEFGHIJ')
+                col = random.choice(range(1, 11))
+                temp = {} 
                 for part in range(ship_len):
                     for a, b in [(0, 0), (-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
                         try:
@@ -138,14 +134,14 @@ J {} {} {} {} {} {} {} {} {} {}
     def get_user_guess(self):
         while True:  # Loop until proper input is received 
             try:
-                flush_input()  # clear all keystrokes made by user 
-                user = input("{}, Select Row and column (e.g. A1): ".format(self.name))  # Get row and column
-                row = user[0].upper()  # Verifies letter is uppercase in guess
-                col = int(user[1:])  # Verifies the digits after letter are numbers
-                if row in 'ABCDEFGHIJ' and col in range(1, 11):  # Checks for range in row and columns
-                    if self.guess_board[row, col] == __class__.sym_empty:  # Check for a guess on an empty cell
-                        return row, col  # return the row and col
-            # Exceptions to watch out for 
+                flush_input()   
+                user = input("{}, Select Row and column (e.g. A1): ".format(self.name)) 
+                row = user[0].upper()  
+                col = int(user[1:])  
+                if row in 'ABCDEFGHIJ' and col in range(1, 11): 
+                    if self.guess_board[row, col] == __class__.sym_empty:  
+                        return row, col  
+            # Exceptions
             except (ValueError, IndexError):
                 pass
             except KeyboardInterrupt:
@@ -175,10 +171,10 @@ J {} {} {} {} {} {} {} {} {} {}
 
     # Method to check for destroyed ships
     def check_if_ship_destroyed(self, ship):
-        for part in self.fleet[ship]:  # check if all parts of the ship got hit
-            if self.fleet[ship][part] is False:  # if at least one part wasn't hit return false
+        for part in self.fleet[ship]:  
+            if self.fleet[ship][part] is False:
                 return False
-        else:  # if all parts of ship got hit
+        else:
             return True
     
     # Method to mark the destroyed ships
@@ -237,18 +233,22 @@ def main():
             my_turn = True
 
         # Asks and send player's names
-        my_name = input("Enter your name: ")  # Gets my name
-        s.send(dumps(my_name))  # Send name to opponent
-        opponent_name = loads(s.recv(1024))  # Receive opposing player's name
-        p = Player(my_name)  # Creates my player
-        p.print_board(my_name, opponent_name)  # print game board
+        my_name = input("Enter your name: ") 
+        s.send(dumps(my_name))  
+        opponent_name = loads(s.recv(1024))  
+        p = Player(my_name)  
+        p.print_board(my_name, opponent_name)
 
-        # Game logic
-        while True:  
-            if my_turn:  # My turn
-                row, col = p.get_user_guess()  # Receives guess
-                s.send(dumps((row, col)))  # Send guess
-                hit = loads(s.recv(1024))  # Opponent determines if it is a hit or miss
+        # Game logic Dump
+        while True:
+
+        #My turn
+            if my_turn:
+                row, col = p.get_user_guess() 
+                s.send(dumps((row, col)))
+                hit = loads(s.recv(1024))
+
+                #Comments line by line to understand
                 if hit: 
                     message = "You guessed {}{} - HIT".format(row, col)
                     p.mark_on_board(row, col, True, p.guess_board)  # Mark hit on my guess board
@@ -287,20 +287,21 @@ def main():
             p.print_board(my_name, opponent_name)  # Print board after each turn
             print(message)
 
-        # This portion is where the winner is declared
-        p.print_board(my_name, opponent_name)  # Prints final look of game board
+        # Winner declared
+        p.print_board(my_name, opponent_name)
         if p.my_ships_destroyed > p.opponent_ships_destroyed:
-            print("{} is the winner!".format(opponent_name))  # Opponent is the winner
+            print("{} is the winner!".format(opponent_name))
         else:
-            print("{} is the winner!".format(my_name))  # I am the winner
+            print("{} is the winner!".format(my_name)) 
     
-    # Various exceptions for the program we could potentially encounter
+    # Various exceptions
     except KeyboardInterrupt:
-        print("\nBye!")
+        print("\nThanks For Playing!")
     except (EOFError, ConnectionAbortedError, ConnectionResetError):
         print("\n Opponent has disconnected")
     except ConnectionRefusedError:
         print("Server never started or there is a network problem")
 
+#Main method to start all the fun
 if __name__ == '__main__':
     main()
