@@ -189,7 +189,7 @@ J {} {} {} {} {} {} {} {} {} {}
             for a, b in [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]:
                 try:
                     if board_type[chr(ord(part[0]) + a), part[1] + b] == __class__.sym_empty:
-                        board_type[chr(ord(part[0]) + a), part[1] + b] = __class__.sym_miss
+                        board_type[chr(ord(part[0]) + a), part[1] + b] = __class__.sym_empty
                 except KeyError:
                     pass
 
